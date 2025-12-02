@@ -3,7 +3,9 @@
 Model inputs shall be 128^3 float numpy arrays
 
 # Model outputs
-During the pre-training phase the task will
+* Outputs depend on the segmentation head
+* Brain segmentation
+* ICV segmentation
 
 # Tasks
 * Contrastive tasks supported
