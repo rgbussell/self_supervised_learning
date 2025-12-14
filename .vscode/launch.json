@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run preprocessing.py in mtnet",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rbussell/repos/mtnet/utils/preprocessing.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "args": [
+                "--data_path",
+                "/home/rbussell/data/brats2020"
+            ]
+        },
+                {
+            "name": "mtnet pretrain",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rbussell/repos/mtnet/pretrain.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "args": [
+                "--data_root",
+                "/home/rbussell/data/brats2020/train/"
+            ]
+        }
+    ]
+}
