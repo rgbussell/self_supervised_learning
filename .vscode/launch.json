@@ -14,7 +14,7 @@
                 "/home/rbussell/data/brats2020"
             ]
         },
-                {
+            {
             "name": "mtnet pretrain",
             "type": "python",
             "request": "launch",
@@ -22,9 +22,28 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "cwd": "/home/rbussell/repos/mtnet/",
             "args": [
                 "--data_root",
-                "/home/rbussell/data/brats2020/train/"
+                "/home/rbussell/data/brats2020/train/",
+                "--batch_size", "160",
+                "--num_workers", "8"
+            ]
+        },
+            {
+            "name": "mtnet finetune",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rbussell/repos/mtnet/finetune.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "cwd": "/home/rbussell/repos/mtnet/",
+            "args": [
+                "--data_root",
+                "/home/rbussell/data/brats2020/train/",
+                "--batch_size", "24",
+                "--num_workers", "8"
             ]
         }
     ]
