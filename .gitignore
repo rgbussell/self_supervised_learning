@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# snapshot files from model training
+snapshots/*
+snapshot/*
+
 # C extensions
 *.so
 
