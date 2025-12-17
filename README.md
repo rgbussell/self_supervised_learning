@@ -8,7 +8,7 @@ Use only open source, publicly available data sources<br>
 Trainable in < 48 hours single mid-grade GPU (specs below)<br>
 Inference including preprocessing pipeline < 60 seconds<br>
 
-![alt text](image-3.png)
+![alt text](assets/image-3.png)
 
 ## Project plan
 Source data from public challenge data sets ISLES, BRaTS, etc.<br>
@@ -30,12 +30,12 @@ Patch-wise reconstruction loss with masked auto-encoder setup
 Pre-trained transformer results
 
 Example validation data set from the pre-training (<24 hours training)
-![alt text](image-1.png)
+![alt text](assets/image-1.png)
 
 Example Fine-tuned on T1 to FLAIR data task (using pretrained ViT encoder)
 Training time < 12 hours, 16 GB 
 left-to-right: T1 image (input), FLAIR ground truth, network prediction<br>
-![alt text](image-2.png)
+![alt text](assets/image-2.png)
 
 ## PET image sourcing
 Openneuro Monash data set available with PET and MRI data in same sessions
@@ -45,7 +45,7 @@ Here is one slice from the Monash resting state fMRI-PET data set from open neur
 With some preprocessing and registration to the corresponding MRI this could
 serve as a fine-tuning data set for the PET->T1 task
 
-![alt text](image.png)
+![alt text](assets/image.png)
 
 ## Citation
 we thank these sources for code and ideas

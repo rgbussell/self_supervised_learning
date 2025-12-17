@@ -7,13 +7,14 @@ Model inputs shall be 128^3 float numpy arrays
 * Brain segmentation
 * ICV segmentation
 
-# Tasks
-* Contrastive tasks supported
-* Inpainting supported
-* Reconstruction loss supported
+# Encoder architecture
+* Vision transformer
+
+# Pretext Task
+* Masked auto-encoder
 
 # Data
-* Fine-tuning data should be interchangeable without channging pretraining
+* Open source data only
 
-# Fine-tunings
-* Freezing
+# Fine-tuning
+* Image-to-image translation task

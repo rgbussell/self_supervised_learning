@@ -2,10 +2,10 @@
 # Pre-training
 * Include medical images of brain
 * May include multi-modal images MRI, PET, CT, etc
-* Pre-training should be performed with no or only easily obtainable labels
+* Unlabelled data, unpaired data
 
 # Fine-tuning
-* Model 
+* Model will use features used during pre-training 
 
 # Model Architecture
 * Segmented architecture
@@ -16,14 +16,12 @@
 # Code architecture
 * Augmentations class
 * SSLModel class
-* Loss class (contrastive, rotational, recon)
+* Loss class (contrastive, rotational, recon, patch-wise reconstruction)
 * Pre-training script
 * Fine-tuning script
 
 # Implemented encoders
-* SimCLR
-* SwinUNETR
-* SwinUNETRv2
+* ViT
 
 # Model Tracking
-* add mlflow tracking hooks
+* mlflow tracking hooks
