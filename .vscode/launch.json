@@ -1,6 +1,7 @@
 {
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Run preprocessing.py in mtnet",
             "type": "python",
@@ -41,6 +42,38 @@
             "cwd": "/home/rbussell/repos/mtnet/",
             "args": [
                 "/home/rbussell/data/openneuro_pet_mri/ds002898-download/sub-01/pet/sub-01_task-rest_trc-18FFDG_rec-acdyn_run-001_pet.nii.gz"
+            ]
+        },
+        {
+            "name": "Run PET/MRI ETL Pipeline",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/etl/run_etl_pipeline.py",
+            "console": "integratedTerminal",
+            "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "test extract PET plane",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/etl/pet_extraction.py",
+            "console": "integratedTerminal",
+            "python": "/home/rbussell/miniconda3/envs/mtnet/bin/python",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "--input_path",
+                "/home/rbussell/data/openneuro_pet_mri/ds002898-download/sub-01/pet/sub-01_task-rest_trc-18FFDG_rec-acdyn_run-001_pet.nii.gz",
+                "--plane_index",
+                "300",
+                "--output_path",
+                "/home/rbussell/data/openneuro_pet_mri/ds002898-download/sub-01/pet/sub-01_pet_plane.nii.gz"
             ]
         }
     ]

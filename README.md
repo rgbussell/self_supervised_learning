@@ -12,6 +12,7 @@ Inference including preprocessing pipeline < 60 seconds<br>
 
 ## Project plan
 Source data from public challenge data sets ISLES, BRaTS, etc.<br>
+Set up ETL pipeline using pipeline orchestrator (dagster)<br>
 Use self-supervision paradigm to learn a multi-modal latent space representation<br>
 Minimize dependence on difficult to train architectures<br>
 
