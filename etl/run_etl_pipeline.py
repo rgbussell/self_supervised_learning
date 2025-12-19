@@ -8,9 +8,10 @@ from pathlib import Path
 
 # Add the script directory to the path
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dagster import materialize_to_memory
-from etl.definitions import defs
+from definitions import defs
 
 if __name__ == "__main__":
     print("Starting PET/MRI ETL Pipeline...")

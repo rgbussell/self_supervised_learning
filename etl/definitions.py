@@ -10,7 +10,7 @@ from dagster import (
     load_assets_from_modules,
 )
 
-import etl.etl_pipeline as etl_pipeline
+import etl_pipeline
 
 # Load all assets from the pipeline module
 all_assets = load_assets_from_modules([etl_pipeline])

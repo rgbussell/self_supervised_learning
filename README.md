@@ -48,6 +48,10 @@ serve as a fine-tuning data set for the PET->T1 task
 
 ![alt text](assets/image.png)
 
+## Image preparation fmr PET-T1 image-to-image translation
+cd ./self_supervised_learning/etl
+python run_etl_pipeline.py
+
 ## Citation
 we thank these sources for code and ideas
 Tao 2023: arXiv:2212.01108v3

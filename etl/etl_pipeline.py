@@ -11,6 +11,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 import nibabel as nib
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 
 from dagster import (
     asset,
@@ -188,31 +190,49 @@ def resample_to_isotropic(img: nib.Nifti1Image, target_voxel_size: float = 1.0) 
     data = img.get_fdata()
     affine = img.affine
     
-    # Get current voxel size
-    current_voxel_size = np.array([np.linalg.norm(affine[:3, i]) for i in range(3)])
+    # Get current voxel size (handle negative signs for direction)
+    voxel_sizes = np.array([np.linalg.norm(affine[:3, i]) for i in range(3)])
     
-    # Calculate new shape
-    new_shape = np.round(data.shape * current_voxel_size / target_voxel_size).astype(int)
+    # Calculate new shape based on scaling
+    scale_factors = voxel_sizes / target_voxel_size
+    new_shape = np.round(data.shape * scale_factors).astype(int)
     
-    # Create new affine with isotropic voxels
+    # Create new affine with isotropic voxels, preserving direction signs
     new_affine = affine.copy()
-    new_affine[0, 0] = target_voxel_size if affine[0, 0] > 0 else -target_voxel_size
-    new_affine[1, 1] = target_voxel_size if affine[1, 1] > 0 else -target_voxel_size
-    new_affine[2, 2] = target_voxel_size if affine[2, 2] > 0 else -target_voxel_size
+    for i in range(3):
+        sign = 1 if affine[i, i] >= 0 else -1
+        new_affine[i, i] = sign * target_voxel_size
     
-    # Calculate coordinates in original space
-    coords_new = np.meshgrid(np.arange(new_shape[0]), np.arange(new_shape[1]), 
-                             np.arange(new_shape[2]), indexing='ij')
-    coords_new_homogeneous = np.stack([coords_new[0], coords_new[1], coords_new[2], 
-                                       np.ones_like(coords_new[0])], axis=-1)
+    # For each voxel in the NEW resampled space, find its coordinates in the OLD space
+    # Create index grids for new space
+    new_indices = np.meshgrid(np.arange(new_shape[0]), np.arange(new_shape[1]), 
+                              np.arange(new_shape[2]), indexing='ij')
     
-    # Transform to original space
-    coords_old_homogeneous = coords_new_homogeneous @ np.linalg.inv(new_affine).T @ affine.T
-    coords_old = coords_old_homogeneous[..., :3]
+    # Convert voxel indices to homogeneous physical coordinates in new space
+    # Reshape for batch matrix multiplication
+    shape = new_indices[0].shape
+    voxel_coords_new = np.array([new_indices[0].ravel(), 
+                                  new_indices[1].ravel(),
+                                  new_indices[2].ravel(),
+                                  np.ones(new_indices[0].size)])  # shape: (4, n_voxels)
+    
+    # Convert to physical coordinates in new space
+    phys_coords = new_affine @ voxel_coords_new  # shape: (4, n_voxels)
+    
+    # Convert physical coordinates back to OLD voxel space
+    old_voxel_coords = np.linalg.inv(affine) @ phys_coords  # shape: (4, n_voxels)
+    
+    # Extract x, y, z coordinates (drop homogeneous coordinate)
+    coords_old = old_voxel_coords[:3, :]  # shape: (3, n_voxels)
     
     # Interpolate using map_coordinates
-    resampled_data = map_coordinates(data, [coords_old[..., i] for i in range(3)], 
+    # map_coordinates expects coordinates as list of arrays, one per dimension
+    resampled_data = map_coordinates(data, 
+                                     [coords_old[0, :], coords_old[1, :], coords_old[2, :]],
                                      order=1, mode='constant', cval=0.0)
+    
+    # Reshape back to new volume shape
+    resampled_data = resampled_data.reshape(shape)
     
     # Create new resampled image
     resampled_img = nib.Nifti1Image(resampled_data, new_affine, img.header)
@@ -344,13 +364,15 @@ def extract_2d_pet_slices_to_splits(
 ) -> Dict[str, Dict[str, Dict[str, Dict[str, str]]]]:
     """
     Extract 2D PET and T1 slices at anatomically corresponding positions.
-    Save each 2D slice pair as separate files in train/val/test folders.
+    Save as combined .npy files with shape (2, 256, 256) for [t1, pet].
+    Compatible with existing MTNet BraTS_Train_Dataset.
     
     Returns:
-        Status message.
+        Dictionary tracking extracted slices.
     """
     output_dir = Path(config.output_dir)
     NUM_SLICES = 20
+    TARGET_SIZE = 256
     split_assignments = create_train_test_val_split
     
     # Create split directories if they don't exist
@@ -358,7 +380,12 @@ def extract_2d_pet_slices_to_splits(
         split_dir = output_dir / split_name
         split_dir.mkdir(parents=True, exist_ok=True)
     
+    # Create visualization directory
+    viz_dir = output_dir / "visualizations"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+    
     slices_by_split = {}
+    slice_counter = 0
     
     for split_name, split_subjects in split_assignments.items():
         split_dir = output_dir / split_name
@@ -386,8 +413,10 @@ def extract_2d_pet_slices_to_splits(
                 pet_center_voxel = np.linalg.inv(pet_img.affine) @ t1_center_physical
                 pet_z_center = int(np.round(pet_center_voxel[2]))
                 
-                # Convert physical center to T1 voxel indices
-                t1_z_center = int(np.round(t1_center_voxel[2]))
+                # Convert physical center back to T1 voxel indices for consistency
+                # This ensures we're using the same anatomical location
+                t1_center_voxel_mapped = np.linalg.inv(t1_img.affine) @ t1_center_physical
+                t1_z_center = int(np.round(t1_center_voxel_mapped[2]))
                 
                 # Clamp to valid range
                 pet_z_center = np.clip(pet_z_center, 0, pet_data.shape[2] - 1)
@@ -402,61 +431,139 @@ def extract_2d_pet_slices_to_splits(
                 t1_end = min(t1_data.shape[2], t1_start + NUM_SLICES)
                 t1_start = max(0, t1_end - NUM_SLICES)  # Adjust if near boundary
                 
-                # Create subject slices directory
-                slices_dir = split_dir / subject
-                slices_dir.mkdir(exist_ok=True)
+                def crop_or_pad_to_target(img_2d, target_size=256):
+                    """Crop or pad 2D image to target size, keeping center."""
+                    h, w = img_2d.shape
+                    center_h, center_w = h // 2, w // 2
+                    target_h, target_w = target_size, target_size
+                    half_h, half_w = target_h // 2, target_w // 2
+                    
+                    # Calculate crop/pad boundaries
+                    start_h = max(0, center_h - half_h)
+                    end_h = min(h, start_h + target_h)
+                    start_w = max(0, center_w - half_w)
+                    end_w = min(w, start_w + target_w)
+                    
+                    # Crop
+                    cropped = img_2d[start_h:end_h, start_w:end_w]
+                    
+                    # Pad if necessary
+                    pad_h_top = max(0, half_h - (center_h - start_h))
+                    pad_h_bottom = target_h - cropped.shape[0] - pad_h_top
+                    pad_w_left = max(0, half_w - (center_w - start_w))
+                    pad_w_right = target_w - cropped.shape[1] - pad_w_left
+                    
+                    padded = np.pad(cropped, ((pad_h_top, pad_h_bottom), 
+                                               (pad_w_left, pad_w_right)), 
+                                   mode='constant', constant_values=0)
+                    return padded
                 
-                TARGET_SIZE = 256
-                
-                # Extract and save individual 2D slices for both PET and T1
-                for slice_idx, (pet_z, t1_z) in enumerate(zip(range(pet_start, pet_end), 
-                                                               range(t1_start, t1_end))):
+                # Extract and save combined 2D slices
+                # CRITICAL: For each PET slice, find corresponding T1 slice in PHYSICAL space
+                # This ensures anatomical correspondence despite different affines
+                for slice_idx, pet_z in enumerate(range(pet_start, pet_end)):
+                    # Get physical coordinates at center of PET slice
+                    # Use middle X,Y coordinates to map between modalities
+                    pet_center_xy = np.array([pet_data.shape[0]//2, pet_data.shape[1]//2, pet_z, 1])
+                    pet_physical = pet_img.affine @ pet_center_xy
+                    
+                    # Convert physical coordinates to T1 voxel space
+                    t1_voxel = np.linalg.inv(t1_img.affine) @ pet_physical
+                    t1_z = int(np.round(t1_voxel[2]))
+                    
+                    # Clamp to valid T1 range
+                    t1_z = np.clip(t1_z, 0, t1_data.shape[2] - 1)
+                    
                     # Extract 2D slices from 3D volumes
                     pet_2d_slice = pet_data[..., pet_z]
                     t1_2d_slice = t1_data[..., t1_z]
                     
-                    # Crop or pad to 256x256 keeping center the same
-                    def crop_or_pad_to_target(img_2d, target_size=256):
-                        h, w = img_2d.shape
-                        center_h, center_w = h // 2, w // 2
-                        target_h, target_w = target_size, target_size
-                        half_h, half_w = target_h // 2, target_w // 2
-                        
-                        # Calculate crop/pad boundaries
-                        start_h = max(0, center_h - half_h)
-                        end_h = min(h, start_h + target_h)
-                        start_w = max(0, center_w - half_w)
-                        end_w = min(w, start_w + target_w)
-                        
-                        # Crop
-                        cropped = img_2d[start_h:end_h, start_w:end_w]
-                        
-                        # Pad if necessary
-                        pad_h_top = max(0, half_h - (center_h - start_h))
-                        pad_h_bottom = target_h - cropped.shape[0] - pad_h_top
-                        pad_w_left = max(0, half_w - (center_w - start_w))
-                        pad_w_right = target_w - cropped.shape[1] - pad_w_left
-                        
-                        padded = np.pad(cropped, ((pad_h_top, pad_h_bottom), 
-                                                   (pad_w_left, pad_w_right)), 
-                                       mode='constant', constant_values=0)
-                        return padded
-                    
+                    # Resize to target size
                     pet_2d_resized = crop_or_pad_to_target(pet_2d_slice, TARGET_SIZE)
                     t1_2d_resized = crop_or_pad_to_target(t1_2d_slice, TARGET_SIZE)
                     
-                    slice_idx_str = str(slice_idx).zfill(3)
+                    # Normalize to [0, 1] using 0.2 and 99.8 percentiles
+                    # This rescales data while clipping outliers
                     
-                    pet_slice_path = slices_dir / f"{subject}_pet_slice_{slice_idx_str}.npy"
-                    t1_slice_path = slices_dir / f"{subject}_T1w_slice_{slice_idx_str}.npy"
+                    # PET normalization with logging
+                    pet_min_before = np.min(pet_2d_resized)
+                    pet_max_before = np.max(pet_2d_resized)
+                    pet_mean_before = np.mean(pet_2d_resized)
                     
-                    np.save(pet_slice_path, pet_2d_resized)
-                    np.save(t1_slice_path, t1_2d_resized)
+                    pet_p002, pet_p998 = np.percentile(pet_2d_resized, 0.2), np.percentile(pet_2d_resized, 99.8)
+                    pet_2d_norm = (pet_2d_resized - pet_p002) / (pet_p998 - pet_p002 + 1e-8)
+                    pet_2d_norm = np.clip(pet_2d_norm, 0, 1)
                     
-                    # Store file paths in nested dictionary
-                    slices_by_split[split_name][subject][slice_idx_str] = {
-                        "pet": str(pet_slice_path),
-                        "t1": str(t1_slice_path),
+                    pet_min_after = np.min(pet_2d_norm)
+                    pet_max_after = np.max(pet_2d_norm)
+                    pet_mean_after = np.mean(pet_2d_norm)
+                    
+                    # T1 normalization with logging
+                    t1_min_before = np.min(t1_2d_resized)
+                    t1_max_before = np.max(t1_2d_resized)
+                    t1_mean_before = np.mean(t1_2d_resized)
+                    
+                    t1_p002, t1_p998 = np.percentile(t1_2d_resized, 0.2), np.percentile(t1_2d_resized, 99.8)
+                    t1_2d_norm = (t1_2d_resized - t1_p002) / (t1_p998 - t1_p002 + 1e-8)
+                    t1_2d_norm = np.clip(t1_2d_norm, 0, 1)
+                    
+                    t1_min_after = np.min(t1_2d_norm)
+                    t1_max_after = np.max(t1_2d_norm)
+                    t1_mean_after = np.mean(t1_2d_norm)
+                    
+                    # Log normalization statistics
+                    if slice_idx == 0:  # Log only for first slice per subject to avoid clutter
+                        print(f"\n  {subject} - {split_name} - Slice {slice_idx}:")
+                        print(f"    PET  Before: min={pet_min_before:.4f}, max={pet_max_before:.4f}, mean={pet_mean_before:.4f}")
+                        print(f"    PET  After:  min={pet_min_after:.4f}, max={pet_max_after:.4f}, mean={pet_mean_after:.4f}")
+                        print(f"    T1   Before: min={t1_min_before:.4f}, max={t1_max_before:.4f}, mean={t1_mean_before:.4f}")
+                        print(f"    T1   After:  min={t1_min_after:.4f}, max={t1_max_after:.4f}, mean={t1_mean_after:.4f}")
+                    
+                    # Save visualization for each slice
+                    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+                    fig.suptitle(f"{subject} - Slice {slice_idx}", fontsize=14)
+                    
+                    # PET before normalization
+                    im0 = axes[0, 0].imshow(pet_2d_resized, cmap='hot')
+                    axes[0, 0].set_title(f"PET Before\nmin={pet_min_before:.2f}, max={pet_max_before:.2f}, mean={pet_mean_before:.2f}")
+                    plt.colorbar(im0, ax=axes[0, 0])
+                    
+                    # PET after normalization
+                    im1 = axes[0, 1].imshow(pet_2d_norm, cmap='hot', vmin=0, vmax=1)
+                    axes[0, 1].set_title(f"PET After (normalized)\nmin={pet_min_after:.2f}, max={pet_max_after:.2f}, mean={pet_mean_after:.2f}")
+                    plt.colorbar(im1, ax=axes[0, 1])
+                    
+                    # T1 before normalization
+                    im2 = axes[1, 0].imshow(t1_2d_resized, cmap='gray')
+                    axes[1, 0].set_title(f"T1 Before\nmin={t1_min_before:.2f}, max={t1_max_before:.2f}, mean={t1_mean_before:.2f}")
+                    plt.colorbar(im2, ax=axes[1, 0])
+                    
+                    # T1 after normalization
+                    im3 = axes[1, 1].imshow(t1_2d_norm, cmap='gray', vmin=0, vmax=1)
+                    axes[1, 1].set_title(f"T1 After (normalized)\nmin={t1_min_after:.2f}, max={t1_max_after:.2f}, mean={t1_mean_after:.2f}")
+                    plt.colorbar(im3, ax=axes[1, 1])
+                    
+                    # Save figure
+                    viz_filename = f"{subject}_slice_{slice_idx:03d}.png"
+                    viz_path = viz_dir / viz_filename
+                    plt.savefig(viz_path, dpi=100, bbox_inches='tight')
+                    plt.close()
+                    
+                    # Create combined array: shape (2, 256, 256) for [t1, pet]
+                    # Compatible with BraTS_Train_Dataset modal_list indexing
+                    combined = np.array([t1_2d_norm, pet_2d_norm], dtype=np.float32)
+                    
+                    # Save with sequential numbering for compatibility with existing dataloader
+                    # which expects format like: /split_dir/123.npy
+                    slice_counter += 1
+                    filename = f"{slice_counter:06d}.npy"
+                    filepath = split_dir / filename
+                    np.save(filepath, combined)
+                    
+                    slices_by_split[split_name][subject][str(slice_idx).zfill(3)] = {
+                        "path": str(filepath),
+                        "t1_z": str(t1_z),
+                        "pet_z": str(pet_z)
                     }
                 
                 print(f"Extracted {NUM_SLICES} 2D slice pairs for {subject} ({split_name}): " +
@@ -469,6 +576,7 @@ def extract_2d_pet_slices_to_splits(
                 continue
     
     print(f"Completed 2D slice extraction for all splits")
+    print(f"Total slices saved: {slice_counter}")
     return slices_by_split
 
 
@@ -522,12 +630,6 @@ def cleanup_temp_files(
     config: DataPipelineConfig
 ) -> str:
     """Clean up temporary PET files."""
-    temp_pet_dir = Path(config.output_dir) / "pet_single_timepoint"
-    
-    if temp_pet_dir.exists():
-        shutil.rmtree(temp_pet_dir)
-        print(f"Cleaned up temporary directory: {temp_pet_dir}")
-    
     return "Cleanup complete"
 
 
