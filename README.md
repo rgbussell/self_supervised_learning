@@ -62,12 +62,15 @@ Result of PET to T1 image-to-image translation after 150 epochs
 ![alt text](assets/image_pet_t1_i2i_initial_finetuning_150.png)
 
 
-## Next steps for PET-T1
+## Additional Data for Fine Tuning PET-T1
 Increase the number of paired slices in finetuning
 Distribution:
 Train: 9 subjects (360 slices)
 Val: 2 subjects (80 slices)
 Test: 2 subjects (80 slices)
+
+![alt text](assets/pet_t1_i2i_moreslices.png)
+
 
 ## Citation
 we thank these sources for code and ideas
