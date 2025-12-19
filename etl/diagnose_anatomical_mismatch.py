@@ -56,7 +56,7 @@ else:
 print(f"\n[3] CURRENT SLICE SELECTION LOGIC (BUGGY)")
 print(f"{'='*80}")
 
-NUM_SLICES = 20
+NUM_SLICES = 40
 
 # Current buggy logic
 t1_shape = t1_data.shape

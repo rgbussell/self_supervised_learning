@@ -29,7 +29,7 @@ print("=" * 80)
 print("TESTING FIXED SLICE EXTRACTION WITH PROPER ANATOMICAL CORRESPONDENCE")
 print("=" * 80)
 
-NUM_SLICES = 20
+NUM_SLICES = 40
 
 # Calculate slice ranges (center-based)
 t1_shape = t1_data.shape

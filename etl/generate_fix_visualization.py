@@ -27,7 +27,7 @@ pet_img = nib.load(pet_path)
 t1_data = t1_img.get_fdata()
 pet_data = pet_img.get_fdata()
 
-NUM_SLICES = 20
+NUM_SLICES = 40
 
 # Calculate slice ranges
 t1_shape = t1_data.shape

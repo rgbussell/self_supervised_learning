@@ -140,7 +140,7 @@ print("✓ Created split assignments")
 
 # Step 5: Extract 2D slices
 print("\n[STEP 5] Extracting 2D slices and creating combined .npy files...")
-NUM_SLICES = 20
+NUM_SLICES = 40
 TARGET_SIZE = 256
 viz_dir = OUTPUT_DATA_DIR / "visualizations"
 viz_dir.mkdir(parents=True, exist_ok=True)

@@ -371,7 +371,7 @@ def extract_2d_pet_slices_to_splits(
         Dictionary tracking extracted slices.
     """
     output_dir = Path(config.output_dir)
-    NUM_SLICES = 20
+    NUM_SLICES = 40
     TARGET_SIZE = 256
     split_assignments = create_train_test_val_split
     
