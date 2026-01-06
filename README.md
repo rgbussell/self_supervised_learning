@@ -72,6 +72,89 @@ Test: 2 subjects (80 slices)
 ![alt text](assets/pet_t1_i2i_moreslices.png)
 
 
+## Inference on Test Data
+
+### Running PET-to-T1 Inference
+
+After training is complete, use the standalone inference script to apply the trained model to test data:
+
+```bash
+# Activate the mtnet conda environment
+eval "$(conda shell.bash hook)" && conda activate mtnet
+
+# Run inference on all test samples (default)
+python scripts/pet_to_t1_inference.py
+
+# Or run on a specific number of samples
+python scripts/pet_to_t1_inference.py --num_samples 5
+```
+
+### Command-Line Options
+
+```bash
+python scripts/pet_to_t1_inference.py \
+    --test_data_dir /home/rbussell/data/pet_mri/test/ \
+    --encoder_ckpt /home/rbussell/repos/mtnet/weight/pet_mri_finetune/E.pth \
+    --generator_ckpt /home/rbussell/repos/mtnet/weight/pet_mri_finetune/G.pth \
+    --output_dir ./outputs/pet_t1_inference/ \
+    --num_samples 80
+```
+
+**Options:**
+- `--test_data_dir`: Directory containing test .npy files (default: /home/rbussell/data/pet_mri/test/)
+- `--encoder_ckpt`: Path to encoder checkpoint E.pth (default: /home/rbussell/repos/mtnet/weight/pet_mri_finetune/E.pth)
+- `--generator_ckpt`: Path to generator checkpoint G.pth (default: /home/rbussell/repos/mtnet/weight/pet_mri_finetune/G.pth)
+- `--output_dir`: Base output directory (default: ./outputs/pet_t1_inference/)
+- `--num_samples`: Number of samples to process (default: all samples in test directory)
+
+### Inference Outputs
+
+The script generates timestamped output directories with the following structure:
+
+```
+outputs/pet_t1_inference/run_YYYYMMDD_HHMMSS/
+├── visualizations/           # PNG comparison images
+│   ├── 000441.png           # Input PET | Predicted T1 | Ground Truth T1
+│   ├── 000442.png
+│   └── ...
+├── metrics.csv              # Quantitative evaluation metrics
+└── config.json              # Run configuration for reproducibility
+```
+
+**Visual Outputs:**
+- 3-panel comparison images showing:
+  - Left: Input PET image
+  - Center: Predicted T1 image (with PSNR and SSIM metrics overlaid)
+  - Right: Ground truth T1 image
+
+**Metrics CSV:**
+- Per-sample metrics: PSNR, SSIM, NMSE
+- Summary statistics: mean and standard deviation across all samples
+
+### Test Set Performance
+
+**Latest results on 80 test samples (2 subjects, 40 slices each):**
+- **PSNR**: 15.29 ± 0.54 dB (Peak Signal-to-Noise Ratio)
+- **SSIM**: 0.56 ± 0.04 (Structural Similarity Index)
+- **NMSE**: 0.33 ± 0.06 (Normalized Mean Squared Error)
+- **Inference Time**: ~24 seconds for 80 slices (~3.3 samples/second on RTX 5070 Ti)
+- **Memory**: Processes one sample at a time to minimize GPU memory usage
+
+### Implementation Details
+
+The inference pipeline:
+1. Loads the trained MAE encoder (E.pth) and MTNet generator (G.pth)
+2. Processes test .npy files containing paired (T1, PET) data
+3. Extracts features using the encoder
+4. Generates T1 predictions using the generator
+5. Calculates quality metrics (PSNR, SSIM, NMSE)
+6. Saves visual comparisons and quantitative results
+
+**Code Location:**
+- Main script: `scripts/pet_to_t1_inference.py`
+- Metrics: `ssl_utils/metrics.py`
+- Visualization: `ssl_utils/visualization.py`
+
 ## Citation
 we thank these sources for code and ideas
 Tao 2023: arXiv:2212.01108v3
