@@ -30,21 +30,21 @@ def create_3d_visualization(nifti_path, output_path):
     # 1. Axial view (top-down)
     ax1 = plt.subplot(2, 4, 1)
     axial = volume[z_mid, :, :]
-    ax1.imshow(axial, cmap='gray', aspect='auto', vmin=0, vmax=1)
+    ax1.imshow(axial, cmap='gray', aspect='equal', vmin=0, vmax=1)
     ax1.set_title(f'Axial View (Z={z_mid})', fontsize=14, fontweight='bold')
     ax1.axis('off')
 
     # 2. Sagittal view (side)
     ax2 = plt.subplot(2, 4, 2)
     sagittal = volume[:, :, x_mid]
-    ax2.imshow(sagittal.T, cmap='gray', aspect='auto', vmin=0, vmax=1)
+    ax2.imshow(sagittal.T, cmap='gray', aspect='equal', vmin=0, vmax=1)
     ax2.set_title(f'Sagittal View (X={x_mid})', fontsize=14, fontweight='bold')
     ax2.axis('off')
 
     # 3. Coronal view (front)
     ax3 = plt.subplot(2, 4, 3)
     coronal = volume[:, y_mid, :]
-    ax3.imshow(coronal.T, cmap='gray', aspect='auto', vmin=0, vmax=1)
+    ax3.imshow(coronal.T, cmap='gray', aspect='equal', vmin=0, vmax=1)
     ax3.set_title(f'Coronal View (Y={y_mid})', fontsize=14, fontweight='bold')
     ax3.axis('off')
 
@@ -82,7 +82,7 @@ def create_3d_visualization(nifti_path, output_path):
         ax = plt.subplot(2, 4, 5 + i)
         if z_pos < volume.shape[0]:
             slice_img = volume[z_pos, :, :]
-            ax.imshow(slice_img, cmap='gray', aspect='auto', vmin=0, vmax=1)
+            ax.imshow(slice_img, cmap='gray', aspect='equal', vmin=0, vmax=1)
             ax.set_title(f'Axial Z={z_pos}', fontsize=12, fontweight='bold')
             ax.axis('off')
 
@@ -110,7 +110,7 @@ def create_3d_visualization(nifti_path, output_path):
         rows.append(row)
     montage = np.concatenate(rows, axis=0)
 
-    ax8.imshow(montage, cmap='gray', aspect='auto', vmin=0, vmax=1)
+    ax8.imshow(montage, cmap='gray', aspect='equal', vmin=0, vmax=1)
     ax8.set_title('Slice Montage (every 5th slice)', fontsize=12, fontweight='bold')
     ax8.axis('off')
 
