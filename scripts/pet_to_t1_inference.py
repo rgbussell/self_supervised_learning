@@ -147,6 +147,7 @@ class InferenceConfig:
 
         # Runtime options
         self.num_samples = args.num_samples
+        self.save_predictions = args.save_predictions
         self.device = self._get_device()
 
     def _get_device(self):
@@ -382,6 +383,11 @@ def main():
         default=None,
         help='Number of samples to process (default: all)'
     )
+    parser.add_argument(
+        '--save_predictions',
+        action='store_true',
+        help='Save raw prediction arrays as .npy files'
+    )
 
     args = parser.parse_args()
 
@@ -394,6 +400,12 @@ def main():
     # Create output directory
     output_dir = create_output_directory(config.output_dir)
     save_run_config(config, output_dir)
+
+    # Create predictions subdirectory if saving raw predictions
+    if config.save_predictions:
+        pred_dir = output_dir / 'predictions'
+        pred_dir.mkdir(exist_ok=True)
+        print(f"Raw predictions will be saved to: {pred_dir}")
 
     # Initialize models
     encoder, generator = initialize_models(config)
@@ -438,6 +450,12 @@ def main():
         # Save visualization
         vis_path = output_dir / 'visualizations' / sample['filename'].replace('.npy', '.png')
         save_comparison_image(pet_np, pred_np, t1_np, vis_path, metrics)
+
+        # Save raw prediction if requested
+        if config.save_predictions:
+            pred_dir = output_dir / 'predictions'
+            pred_path = pred_dir / sample['filename'].replace('.npy', '_prediction.npy')
+            np.save(pred_path, pred_np)
 
     # Calculate summary statistics
     df = pd.DataFrame(results)
