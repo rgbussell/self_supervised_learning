@@ -167,7 +167,7 @@ The reconstruction pipeline transforms independent 2D predictions into smooth, s
 - Removing inter-slice discontinuities
 - Creating NIfTI files with correct affine matrices
 
-![3D Volume Reconstruction](assets/3d_volume_reconstruction.png)
+![3D Volume Reconstruction](assets/3d_volume_reconstruction.png?v=2)
 
 ### Running 3D Reconstruction
 
