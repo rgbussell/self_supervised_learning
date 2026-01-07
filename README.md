@@ -155,6 +155,197 @@ The inference pipeline:
 - Metrics: `ssl_utils/metrics.py`
 - Visualization: `ssl_utils/visualization.py`
 
+## 3D Volume Reconstruction for Atlas Registration
+
+After generating 2D slice predictions, reconstruct 3D T1 volumes suitable for registration to standard atlases (e.g., MNI152).
+
+### Overview
+
+The reconstruction pipeline transforms independent 2D predictions into smooth, spatially-consistent 3D volumes by:
+- Stacking slices with proper spatial metadata
+- Normalizing intensity across slices
+- Removing inter-slice discontinuities
+- Creating NIfTI files with correct affine matrices
+
+![3D Volume Reconstruction](assets/3d_volume_reconstruction.png)
+
+### Running 3D Reconstruction
+
+```bash
+# Step 1: Run inference with predictions saved
+eval "$(conda shell.bash hook)" && conda activate mtnet
+python scripts/pet_to_t1_inference.py --save_predictions
+
+# Step 2: Reconstruct 3D volume for each subject
+python scripts/reconstruct_and_register.py \
+    --predictions_dir ./outputs/pet_t1_inference/run_YYYYMMDD_HHMMSS/predictions/ \
+    --subject_id sub-09 \
+    --reference_t1 /home/rbussell/data/pet_mri/resampled/sub-09/sub-09_T1w_1mm.nii.gz \
+    --save_intermediates
+
+# Repeat for sub-10
+python scripts/reconstruct_and_register.py \
+    --predictions_dir ./outputs/pet_t1_inference/run_YYYYMMDD_HHMMSS/predictions/ \
+    --subject_id sub-10 \
+    --reference_t1 /home/rbussell/data/pet_mri/resampled/sub-10/sub-10_T1w_1mm.nii.gz \
+    --save_intermediates
+```
+
+### Command-Line Options
+
+```bash
+python scripts/reconstruct_and_register.py \
+    --predictions_dir <path_to_predictions> \
+    --subject_id sub-09 \
+    --reference_t1 <path_to_reference_T1> \
+    --apply_n4 \
+    --smooth_sigma_z 0.5 \
+    --smooth_sigma_xy 0.3 \
+    --save_intermediates \
+    --output_dir ./outputs/reconstructed_volumes/
+```
+
+**Options:**
+- `--predictions_dir`: Directory containing prediction .npy files (required)
+- `--subject_id`: Subject identifier: `sub-09` or `sub-10` (required)
+- `--reference_t1`: Path to reference T1 NIfTI for spatial metadata (required)
+- `--output_dir`: Base output directory (default: `./outputs/reconstructed_volumes/`)
+- `--apply_n4`: Apply N4 bias field correction (slower but better quality)
+- `--smooth_sigma_z`: Smoothing sigma along Z-axis (default: 0.5)
+- `--smooth_sigma_xy`: Smoothing sigma in XY plane (default: 0.3)
+- `--save_intermediates`: Save intermediate processing steps
+
+### Reconstruction Pipeline
+
+The 7-stage pipeline ensures smooth, registration-ready volumes:
+
+**Stage 1: Stack Slices**
+- Assembles 40 consecutive 2D slices into 3D volume
+- Each subject: 40 slices × 256 × 256 pixels
+
+**Stage 2: Remove Outliers**
+- Median filter along Z-axis (kernel size: 3)
+- Removes extreme outlier slices
+
+**Stage 3: Histogram Matching**
+- Normalizes intensity distribution across slices
+- Uses middle slice as reference
+- Eliminates inter-slice intensity jumps
+
+**Stage 4: N4 Bias Correction (Optional)**
+- Corrects intensity non-uniformity
+- Uses SimpleITK N4BiasFieldCorrectionImageFilter
+- Recommended for better registration quality
+
+**Stage 5: Anisotropic Smoothing**
+- Gaussian smoothing: σ_z=0.5 (inter-slice), σ_xy=0.3 (in-plane)
+- More smoothing along Z to reduce discontinuities
+- Less in-plane to preserve anatomical detail
+
+**Stage 6: Global Normalization**
+- Clips to 0.2-99.8 percentile range
+- Maps to [0, 1] intensity range
+
+**Stage 7: NIfTI Creation**
+- Recovers spatial metadata from reference T1
+- Adjusts affine matrix for slice subset
+- Creates registration-ready NIfTI file
+
+### Reconstruction Outputs
+
+Timestamped output directories contain:
+
+```
+outputs/reconstructed_volumes/sub-09_reconstructed_YYYYMMDD_HHMMSS/
+├── sub-09_reconstructed.nii.gz              # Final 3D volume
+├── reconstruction_config.json               # Run configuration
+├── visualizations/
+│   ├── 01_intensity_profile_stacked.png    # After stacking
+│   ├── 02_intensity_profile_histogram_matched.png
+│   ├── 04_intensity_profile_smoothed.png   # After smoothing
+│   ├── 05_intensity_profile_final.png      # Final result
+│   └── 06_orthogonal_views.png             # Axial/sagittal/coronal
+└── intermediates/                           # Intermediate .npy files
+    ├── 01_stacked.npy
+    ├── 02_outliers_removed.npy
+    ├── 03_histogram_matched.npy
+    ├── 04_n4_corrected.npy
+    ├── 05_smoothed.npy
+    └── 06_normalized.npy
+```
+
+### Quality Metrics
+
+**Intensity Continuity (Inter-Slice Discontinuity):**
+- **sub-09**: 0.0067 → 0.0000 (after processing)
+- **sub-10**: 0.0030 → 0.0000 (after processing)
+
+**Output Volumes:**
+- Shape: (40, 256, 256) per subject
+- Spacing: 1mm isotropic (inherited from reference T1)
+- Intensity range: [0, 1] normalized
+- Format: NIfTI (.nii.gz) with proper affine matrix
+
+### Registration to Atlas
+
+The reconstructed volumes are ready for registration to standard atlases:
+
+**Using ANTs:**
+```bash
+# Affine registration
+antsRegistrationSyN.sh -d 3 \
+    -f /path/to/MNI152_T1_1mm_brain.nii.gz \
+    -m sub-09_reconstructed.nii.gz \
+    -o sub-09_to_MNI_ \
+    -t a
+
+# Non-linear registration (SyN)
+antsRegistrationSyN.sh -d 3 \
+    -f /path/to/MNI152_T1_1mm_brain.nii.gz \
+    -m sub-09_reconstructed.nii.gz \
+    -o sub-09_to_MNI_ \
+    -t s
+```
+
+**Using FSL:**
+```bash
+# Affine registration (FLIRT)
+flirt -in sub-09_reconstructed.nii.gz \
+      -ref ${FSLDIR}/data/standard/MNI152_T1_1mm_brain.nii.gz \
+      -out sub-09_to_MNI_affine.nii.gz \
+      -omat affine_transform.mat \
+      -dof 12
+
+# Non-linear registration (FNIRT)
+fnirt --in=sub-09_reconstructed.nii.gz \
+      --ref=${FSLDIR}/data/standard/MNI152_T1_1mm.nii.gz \
+      --aff=affine_transform.mat \
+      --cout=sub-09_to_MNI_warp \
+      --iout=sub-09_to_MNI_nonlinear.nii.gz
+```
+
+### Implementation Details
+
+**Code Location:**
+- Main script: `scripts/reconstruct_and_register.py`
+- Volume processing utilities: `ssl_utils/volume_processing.py`
+- 3D visualization: `scripts/visualize_3d_volume.py`
+
+**Key Functions:**
+- `stack_slices_to_3d()`: Assembles 2D slices into 3D volume
+- `normalize_intensity_histogram_matching()`: Inter-slice intensity normalization
+- `apply_n4_bias_correction()`: N4 bias field correction
+- `smooth_volume_anisotropic()`: Anisotropic Gaussian smoothing
+- `create_nifti_from_reference()`: NIfTI creation with proper affine matrix
+- `full_reconstruction_pipeline()`: End-to-end reconstruction
+
+**Dependencies:**
+- nibabel: NIfTI file I/O
+- SimpleITK: N4 bias correction
+- scipy: Gaussian and median filtering
+- scikit-image: Histogram matching
+- matplotlib: Visualization
+
 ## Citation
 we thank these sources for code and ideas
 Tao 2023: arXiv:2212.01108v3
